@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>轮播图</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      .carousel {
+        position: relative;
+        width: 1226px;
+        height: 460px;
+        margin: 20px auto;
+        overflow: hidden;
+      }
+
+      .carousel-container {
+        display: flex;
+        width: 100%;
+        height: 100%;
+        transition: transform 0.5s ease;
+      }
+
+      .carousel-item {
+        flex-shrink: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      .carousel-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .carousel-btn {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 40px;
+        height: 70px;
+        background-color: rgba(0, 0, 0, 0.3);
+        color: #fff;
+        border: none;
+        cursor: pointer;
+        font-size: 20px;
+      }
+
+      .carousel-btn:hover {
+        background-color: rgba(0, 0, 0, 0.5);
+      }
+
+      .carousel-btn.prev {
+        left: 0;
+      }
+
+      .carousel-btn.next {
+        right: 0;
+      }
+
+      .carousel-indicators {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 8px;
+      }
+
+      .indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: rgba(255, 255, 255, 0.4);
+        cursor: pointer;
+      }
+
+      .indicator.active {
+        background-color: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="carousel">
+      <div class="carousel-container"></div>
+      <button class="carousel-btn prev">←</button>
+      <button class="carousel-btn next">→</button>
+      <div class="carousel-indicators"></div>
+    </div>
+
+    <script>
+      const imgs = [
+        "https://cdn.cnbj1.fds.api.mi-img.com/mi-mall/70e646187d15c29ef2762da104065d21.jpg?thumb=1&w=1226&h=460&f=webp&q=90",
+        "https://cdn.cnbj1.fds.api.mi-img.com/mi-mall/28aec77fa645c4d78a5154963d025e00.jpg?w=2452&h=920",
+        "https://cdn.cnbj1.fds.api.mi-img.com/mi-mall/d092e593a92ea73c70cd138ee843aba2.jpg?thumb=1&w=1226&h=460&f=webp&q=90",
+        "https://cdn.cnbj1.fds.api.mi-img.com/mi-mall/ace3f78a6db3bf071b84213f0e531e88.jpg?thumb=1&w=1226&h=460&f=webp&q=90",
+      ];
+
+      class Carousel {
+        constructor(container, images) {
+          this.container = container;
+          this.images = images;
+          this.currentIndex = 0;
+          this.autoPlayTimer = null;
+          this.init();
+        }
+
+        init() {
+          // 创建轮播图片
+          this.images.forEach((src) => {
+            const item = document.createElement("div");
+            item.className = "carousel-item";
+            item.innerHTML = `<img src="${src}" alt="carousel image">`;
+            this.container
+              .querySelector(".carousel-container")
+              .appendChild(item);
+          });
+
+          // 创建指示器
+          this.images.forEach((_, index) => {
+            const indicator = document.createElement("div");
+            indicator.className = `indicator ${index === 0 ? "active" : ""}`;
+            indicator.addEventListener("click", () => this.goTo(index));
+            this.container
+              .querySelector(".carousel-indicators")
+              .appendChild(indicator);
+          });
+
+          // 绑定按钮事件
+          this.container
+            .querySelector(".prev")
+            .addEventListener("click", () => this.prev());
+          this.container
+            .querySelector(".next")
+            .addEventListener("click", () => this.next());
+
+          // 自动播放
+          this.startAutoPlay();
+
+          // 鼠标悬停时暂停自动播放
+          this.container.addEventListener("mouseenter", () =>
+            this.stopAutoPlay()
+          );
+          this.container.addEventListener("mouseleave", () =>
+            this.startAutoPlay()
+          );
+        }
+
+        updateSlide() {
+          const offset = -this.currentIndex * 100;
+          this.container.querySelector(
+            ".carousel-container"
+          ).style.transform = `translateX(${offset}%)`;
+
+          // 更新指示器
+          const indicators = this.container.querySelectorAll(".indicator");
+          indicators.forEach((indicator, index) => {
+            indicator.classList.toggle("active", index === this.currentIndex);
+          });
+        }
+
+        next() {
+          this.currentIndex = (this.currentIndex + 1) % this.images.length;
+          this.updateSlide();
+        }
+
+        prev() {
+          this.currentIndex =
+            (this.currentIndex - 1 + this.images.length) % this.images.length;
+          this.updateSlide();
+        }
+
+        goTo(index) {
+          this.currentIndex = index;
+          this.updateSlide();
+        }
+
+        startAutoPlay() {
+          this.autoPlayTimer = setInterval(() => this.next(), 3000);
+        }
+
+        stopAutoPlay() {
+          clearInterval(this.autoPlayTimer);
+        }
+      }
+
+      // 初始化轮播图
+      new Carousel(document.querySelector(".carousel"), imgs);
+    </script>
+  </body>
+</html>

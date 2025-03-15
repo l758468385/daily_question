@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MySwiper 实现</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* 容器样式 */
+        .my-swiper {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            height: 400px;
+            margin: 20px auto;
+            overflow: hidden;
+            touch-action: pan-y; /* 允许垂直滚动，水平滑动用于轮播 */
+        }
+
+        /* 轮播内容容器 */
+        .swiper-wrapper {
+            display: flex;
+            height: 100%;
+            transition: transform 0.3s ease;
+        }
+
+        /* 轮播项 */
+        .swiper-slide {
+            flex-shrink: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .swiper-slide img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* 导航按钮 */
+        .swiper-button {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 44px;
+            height: 44px;
+            background: rgba(0, 0, 0, 0.5);
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            z-index: 10;
+            border-radius: 50%;
+            font-size: 18px;
+        }
+
+        .swiper-button-prev { left: 10px; }
+        .swiper-button-next { right: 10px; }
+
+        /* 分页器 */
+        .swiper-pagination {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+        }
+
+        .swiper-pagination-bullet {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.5);
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .swiper-pagination-bullet-active {
+            background: #fff;
+            transform: scale(1.2);
+        }
+
+        /* 进度条 */
+        .swiper-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.3);
+            width: 100%;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: #fff;
+            width: 0;
+            transition: width 0.3s linear;
+        }
+    </style>
+</head>
+<body>
+    <div class="my-swiper">
+        <div class="swiper-wrapper">
+            <!-- 轮播内容将通过 JS 动态添加 -->
+        </div>
+        <button class="swiper-button swiper-button-prev">←</button>
+        <button class="swiper-button swiper-button-next">→</button>
+        <div class="swiper-pagination"></div>
+        <div class="swiper-progress">
+            <div class="progress-bar"></div>
+        </div>
+    </div>
+
+    <script>
+        class MySwiper {
+            constructor(container, options = {}) {
+                // 初始化配置
+                this.container = typeof container === 'string' ? 
+                    document.querySelector(container) : container;
+                this.options = {
+                    loop: true,                    // 是否循环
+                    autoplay: true,                // 是否自动播放
+                    duration: 3000,                // 自动播放间隔
+                    initialSlide: 0,               // 初始索引
+                    speed: 300,                    // 过渡动画速度
+                    ...options
+                };
+
+                // 状态变量
+                this.slides = [];                  // 轮播项数组
+                this.currentIndex = this.options.initialSlide;
+                this.isAnimating = false;          // 是否正在动画中
+                this.autoplayTimer = null;         // 自动播放定时器
+                this.progressTimer = null;         // 进度条定时器
+
+                // 触摸相关状态
+                this.touchStart = { x: 0, y: 0 };
+                this.touchMove = { x: 0, y: 0 };
+                this.isTouching = false;
+
+                // 初始化
+                this.init();
+            }
+
+            init() {
+                // 创建轮播内容
+                this.createSlides();
+                // 绑定事件
+                this.bindEvents();
+                // 开始自动播放
+                if (this.options.autoplay) {
+                    this.startAutoplay();
+                }
+                // 更新初始状态
+                this.updateSlide(true);
+            }
+
+            createSlides() {
+                const images = [
+                    'https://picsum.photos/800/400?random=1',
+                    'https://picsum.photos/800/400?random=2',
+                    'https://picsum.photos/800/400?random=3',
+                    'https://picsum.photos/800/400?random=4'
+                ];
+
+                const wrapper = this.container.querySelector('.swiper-wrapper');
+                const pagination = this.container.querySelector('.swiper-pagination');
+
+                // 创建轮播项和分页器
+                images.forEach((src, index) => {
+                    // 创建轮播项
+                    const slide = document.createElement('div');
+                    slide.className = 'swiper-slide';
+                    slide.innerHTML = `<img src="${src}" alt="slide ${index + 1}">`;
+                    wrapper.appendChild(slide);
+                    this.slides.push(slide);
+
+                    // 创建分页器项
+                    const bullet = document.createElement('div');
+                    bullet.className = 'swiper-pagination-bullet';
+                    bullet.addEventListener('click', () => this.slideTo(index));
+                    pagination.appendChild(bullet);
+                });
+            }
+
+            bindEvents() {
+                // 按钮事件
+                this.container.querySelector('.swiper-button-prev')
+                    .addEventListener('click', () => this.slidePrev());
+                this.container.querySelector('.swiper-button-next')
+                    .addEventListener('click', () => this.slideNext());
+
+                // 触摸事件
+                const wrapper = this.container.querySelector('.swiper-wrapper');
+                wrapper.addEventListener('touchstart', (e) => this.onTouchStart(e), { passive: true });
+                wrapper.addEventListener('touchmove', (e) => this.onTouchMove(e), { passive: true });
+                wrapper.addEventListener('touchend', () => this.onTouchEnd());
+
+                // 鼠标事件
+                this.container.addEventListener('mouseenter', () => this.pauseAutoplay());
+                this.container.addEventListener('mouseleave', () => this.resumeAutoplay());
+            }
+
+            // 触摸事件处理
+            onTouchStart(e) {
+                this.isTouching = true;
+                this.touchStart.x = e.touches[0].clientX;
+                this.touchStart.y = e.touches[0].clientY;
+                this.pauseAutoplay();
+            }
+
+            onTouchMove(e) {
+                if (!this.isTouching) return;
+
+                this.touchMove.x = e.touches[0].clientX;
+                this.touchMove.y = e.touches[0].clientY;
+
+                const deltaX = this.touchMove.x - this.touchStart.x;
+                const wrapper = this.container.querySelector('.swiper-wrapper');
+                
+                // 计算位移并应用
+                const offset = -this.currentIndex * 100 + (deltaX / wrapper.offsetWidth) * 100;
+                this.setTransform(offset);
+            }
+
+            onTouchEnd() {
+                if (!this.isTouching) return;
+
+                const deltaX = this.touchMove.x - this.touchStart.x;
+                const threshold = this.container.offsetWidth * 0.15; // 15% 的阈值
+
+                if (Math.abs(deltaX) > threshold) {
+                    // 判断滑动方向
+                    if (deltaX > 0) {
+                        this.slidePrev();
+                    } else {
+                        this.slideNext();
+                    }
+                } else {
+                    // 回弹到当前位置
+                    this.updateSlide(true);
+                }
+
+                this.isTouching = false;
+                this.resumeAutoplay();
+            }
+
+            // 切换动画
+            setTransform(offset) {
+                const wrapper = this.container.querySelector('.swiper-wrapper');
+                wrapper.style.transform = `translateX(${offset}%)`;
+            }
+
+            // 更新轮播状态
+            updateSlide(animate = true) {
+                const wrapper = this.container.querySelector('.swiper-wrapper');
+                wrapper.style.transition = animate ? `transform ${this.options.speed}ms ease` : 'none';
+                
+                // 更新位置
+                this.setTransform(-this.currentIndex * 100);
+
+                // 更新分页器
+                const bullets = this.container.querySelectorAll('.swiper-pagination-bullet');
+                bullets.forEach((bullet, index) => {
+                    bullet.classList.toggle('swiper-pagination-bullet-active', 
+                        index === this.currentIndex);
+                });
+
+                // 更新进度条
+                this.updateProgress();
+            }
+
+            // 切换到指定索引
+            slideTo(index, animate = true) {
+                if (this.isAnimating) return;
+                this.isAnimating = true;
+
+                this.currentIndex = index;
+                this.updateSlide(animate);
+
+                setTimeout(() => {
+                    this.isAnimating = false;
+                }, this.options.speed);
+            }
+
+            // 下一张
+            slideNext() {
+                const nextIndex = (this.currentIndex + 1) % this.slides.length;
+                this.slideTo(nextIndex);
+            }
+
+            // 上一张
+            slidePrev() {
+                const prevIndex = (this.currentIndex - 1 + this.slides.length) % this.slides.length;
+                this.slideTo(prevIndex);
+            }
+
+            // 自动播放控制
+            startAutoplay() {
+                if (this.options.autoplay) {
+                    this.autoplayTimer = setInterval(() => {
+                        this.slideNext();
+                    }, this.options.duration);
+                    this.updateProgress();
+                }
+            }
+
+            pauseAutoplay() {
+                clearInterval(this.autoplayTimer);
+                clearInterval(this.progressTimer);
+                this.container.querySelector('.progress-bar').style.width = '0';
+            }
+
+            resumeAutoplay() {
+                if (this.options.autoplay) {
+                    this.startAutoplay();
+                }
+            }
+
+            // 进度条控制
+            updateProgress() {
+                const progressBar = this.container.querySelector('.progress-bar');
+                progressBar.style.width = '0';
+
+                clearInterval(this.progressTimer);
+                
+                if (this.options.autoplay) {
+                    const startTime = Date.now();
+                    this.progressTimer = setInterval(() => {
+                        const elapsed = Date.now() - startTime;
+                        const progress = (elapsed / this.options.duration) * 100;
+                        progressBar.style.width = `${Math.min(progress, 100)}%`;
+                    }, 16); // 约60fps
+                }
+            }
+        }
+
+        // 初始化轮播图
+        new MySwiper('.my-swiper', {
+            loop: true,
+            autoplay: true,
+            duration: 3000,
+            speed: 300
+        });
+    </script>
+</body>
+</html> 
